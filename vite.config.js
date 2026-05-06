@@ -4,6 +4,7 @@ import { fileURLToPath, URL } from 'node:url'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/pharma-care-hub/',
   logLevel: 'error', // Suppress warnings, only show errors
   resolve: {
     alias: {

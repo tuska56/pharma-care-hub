@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { MotorCalculo } from './motorCalculo';
 
 const STORAGE_KEY = 'pharma_care_hub_data';
 
@@ -21,7 +22,12 @@ const defaultState = {
   convenio: {
     anio: new Date().getFullYear(),
     nombre: 'Farmacia Local',
-    logo_url: null
+    logo_url: null,
+    horas_anuales: 0,
+    dias_vacaciones: 0,
+    dias_asuntos_propios: 0,
+    provincia: 'Burgos',
+    localidad: 'Miranda de Ebro'
   },
   isLoading: false
 };
@@ -44,17 +50,23 @@ const writeStorage = (value) => {
 
 const getId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-const buildEstadisticas = (empleados) => {
-  const activos = empleados.filter(emp => emp.activo !== false);
+const buildEstadisticas = (state) => {
+  const activos = state.empleados.filter(emp => emp.activo !== false);
   return {
     totalEmpleados: activos.length,
-    empleados: activos.map(emp => ({
-      empleado: emp,
-      vacaciones: { disponibles: 0, total: 0 },
-      asuntos: { disponibles: 0, total: 0 },
-      sabados: { usados: 0, porSaldo: 0 },
-      horas: { saldo: emp.horas_arrastre || 0 }
-    }))
+    empleados: activos.map(emp => {
+      const vacaciones = MotorCalculo.calcularVacaciones(emp, state.convenio, state.eventos);
+      const asuntos = MotorCalculo.calcularAsuntosPropios(emp, state.convenio, state.eventos);
+      const sabados = MotorCalculo.calcularSabadosLibres(emp, state.convenio, state.eventos, state.festivos, state.horarios);
+      const horas = MotorCalculo.calcularHorasAnuales(emp, state.convenio, state.eventos, state.festivos, state.horarios);
+      return {
+        empleado: emp,
+        vacaciones,
+        asuntos,
+        sabados,
+        horas
+      };
+    })
   };
 };
 
@@ -66,7 +78,14 @@ export default function useAppData() {
   }, [state]);
 
   const setAnioActual = useCallback((anio) => {
-    setState(prev => ({ ...prev, anioActual: anio }));
+    setState(prev => ({
+      ...prev,
+      anioActual: anio,
+      convenio: {
+        ...prev.convenio,
+        anio
+      }
+    }));
   }, []);
 
   const setModoSimulacion = useCallback((value) => {
@@ -192,7 +211,26 @@ export default function useAppData() {
     }
   }), []);
 
-  const estadisticas = useMemo(() => buildEstadisticas(state.empleados), [state.empleados]);
+  const restaurarBackup = useMemo(() => ({
+    mutate: (backup) => {
+      setState(prev => ({
+        ...prev,
+        empleados: backup.empleados || [],
+        eventos: backup.eventos || [],
+        horarios: backup.horarios || [],
+        guardias: backup.guardias || [],
+        festivos: backup.festivos || [],
+        convenio: {
+          ...prev.convenio,
+          ...backup.convenio,
+          anio: backup.convenio?.anio ?? prev.convenio.anio
+        },
+        anioActual: backup.anio ?? prev.anioActual
+      }));
+    }
+  }), []);
+
+  const estadisticas = useMemo(() => buildEstadisticas(state), [state.empleados, state.eventos, state.horarios, state.festivos, state.convenio]);
 
   return {
     anioActual: state.anioActual,
@@ -222,6 +260,7 @@ export default function useAppData() {
     crearFestivo,
     actualizarFestivo,
     eliminarFestivo,
-    guardarConvenio
+    guardarConvenio,
+    restaurarBackup
   };
 }

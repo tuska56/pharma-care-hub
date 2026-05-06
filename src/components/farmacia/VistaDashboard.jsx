@@ -1,11 +1,12 @@
 import React from 'react';
-import { Users, Download } from 'lucide-react';
+import { Users, Download, Upload } from 'lucide-react';
 import CalendarioGlobal from './CalendarioGlobal';
 
 export default function VistaDashboard({ 
   anioActual, setAnioActual, empleados, eventos, festivos, estadisticas,
-  onSelectEmpleado, onExportDB
+  onSelectEmpleado, onExportDB, onImportDB
 }) {
+  const currentYear = new Date().getFullYear();
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -15,21 +16,27 @@ export default function VistaDashboard({
           <p className="text-sm text-gray-500 mt-0.5">Resumen general del año {anioActual}</p>
         </div>
         <div className="flex items-center gap-2">
-          <select 
-            value={anioActual} 
-            onChange={(e) => setAnioActual(parseInt(e.target.value))}
-            className="px-3 py-2 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          >
-            {[2024, 2025, 2026, 2027].map(a => (
-              <option key={a} value={a}>Año {a}</option>
-            ))}
-          </select>
+          <input
+            type="number"
+            min="2000"
+            max={currentYear + 20}
+            value={anioActual}
+            onChange={(e) => setAnioActual(Number(e.target.value) || currentYear)}
+            className="w-24 px-3 py-2 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          />
           <button 
             onClick={onExportDB}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
           >
             <Download size={15} />
             <span className="hidden sm:inline">Backup</span>
+          </button>
+          <button 
+            onClick={onImportDB}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <Upload size={15} />
+            <span className="hidden sm:inline">Importar</span>
           </button>
         </div>
       </div>

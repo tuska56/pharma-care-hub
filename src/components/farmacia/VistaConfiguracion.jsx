@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Plus, Pencil, Trash2, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Pencil, Trash2, Save, Download } from 'lucide-react';
 import ModalGenerico from './ModalGenerico';
+import { obtenerFestivosEspana, fusionarFestivos, PROVINCIAS_ESPAÑA } from './obtenerFestivos';
 import logoSvg from '@/assets/logo.svg';
 
 export default function VistaConfiguracion({
@@ -16,15 +17,38 @@ export default function VistaConfiguracion({
   const [modalTraspaso, setModalTraspaso] = useState(false);
   const [editandoGuardia, setEditandoGuardia] = useState(null);
   const [editandoFestivo, setEditandoFestivo] = useState(null);
+  const [cargandoFestivos, setCargandoFestivos] = useState(false);
   
-  const [formConvenio, setFormConvenio] = useState({ horas_anuales: convenio.horas_anuales, dias_vacaciones: convenio.dias_vacaciones, dias_asuntos_propios: convenio.dias_asuntos_propios });
+  const [formConvenio, setFormConvenio] = useState({ horas_anuales: convenio.horas_anuales, dias_vacaciones: convenio.dias_vacaciones, dias_asuntos_propios: convenio.dias_asuntos_propios, provincia: convenio.provincia || 'Burgos', localidad: convenio.localidad || 'Miranda de Ebro' });
   const [formGuardia, setFormGuardia] = useState({ empleado_id: '', fecha: '', tipo: '', observaciones: '' });
   const [formFestivo, setFormFestivo] = useState({ fecha: '', descripcion: '', ambito: 'MANUAL', medio_dia: false });
   const [formTraspaso, setFormTraspaso] = useState({ empleado_id: '', horas: 0 });
 
   React.useEffect(() => {
-    setFormConvenio({ horas_anuales: convenio.horas_anuales, dias_vacaciones: convenio.dias_vacaciones, dias_asuntos_propios: convenio.dias_asuntos_propios });
+    setFormConvenio({ horas_anuales: convenio.horas_anuales, dias_vacaciones: convenio.dias_vacaciones, dias_asuntos_propios: convenio.dias_asuntos_propios, provincia: convenio.provincia || 'Burgos', localidad: convenio.localidad || 'Miranda de Ebro' });
   }, [convenio]);
+
+  useEffect(() => {
+    cargarFestivosAutomaticamente();
+  }, [anioActual, formConvenio.provincia, formConvenio.localidad]);
+
+  const cargarFestivosAutomaticamente = async () => {
+    setCargandoFestivos(true);
+    try {
+      const nuevos = await obtenerFestivosEspana(anioActual, formConvenio.provincia, formConvenio.localidad);
+      const fusionados = fusionarFestivos(festivos, nuevos);
+      const existentesIds = new Set(festivos.map(f => f.id));
+      fusionados.forEach(f => {
+        if (!existentesIds.has(f.id)) {
+          onCrearFestivo(f);
+        }
+      });
+    } catch (error) {
+      console.error('Error cargando festivos:', error);
+    } finally {
+      setCargandoFestivos(false);
+    }
+  };
 
   const guardarGuardia = () => {
     if (!formGuardia.empleado_id || !formGuardia.fecha || !formGuardia.tipo) return;
@@ -71,9 +95,14 @@ export default function VistaConfiguracion({
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Configuración</h1>
           <p className="text-sm text-gray-500 mt-0.5">Año {anioActual}</p>
         </div>
-        <select value={anioActual} onChange={e => setAnioActual(parseInt(e.target.value))} className="px-3 py-2 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-          {[2024, 2025, 2026, 2027].map(a => <option key={a} value={a}>Año {a}</option>)}
-        </select>
+        <input
+          type="number"
+          min="2000"
+          max={new Date().getFullYear() + 20}
+          value={anioActual}
+          onChange={e => setAnioActual(Number(e.target.value) || new Date().getFullYear())}
+          className="w-24 px-3 py-2 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+        />
       </div>
 
       {/* Logo fijo */}
@@ -88,7 +117,7 @@ export default function VistaConfiguracion({
       {/* Convenio */}
       <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
         <h2 className="text-lg font-bold text-gray-900 mb-4">Convenio {anioActual}</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
             <label className="text-sm font-medium text-gray-700">Horas Anuales</label>
             <input type="number" value={formConvenio.horas_anuales} onChange={e => setFormConvenio({ ...formConvenio, horas_anuales: parseFloat(e.target.value) })} className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -100,6 +129,18 @@ export default function VistaConfiguracion({
           <div>
             <label className="text-sm font-medium text-gray-700">Días Asuntos Propios</label>
             <input type="number" value={formConvenio.dias_asuntos_propios} onChange={e => setFormConvenio({ ...formConvenio, dias_asuntos_propios: parseInt(e.target.value) })} className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700">Provincia</label>
+            <select value={formConvenio.provincia} onChange={e => setFormConvenio({ ...formConvenio, provincia: e.target.value })} className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              {Object.keys(PROVINCIAS_ESPAÑA).sort().map(prov => (
+                <option key={prov} value={prov}>{prov}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700">Localidad</label>
+            <input type="text" value={formConvenio.localidad} onChange={e => setFormConvenio({ ...formConvenio, localidad: e.target.value })} placeholder="Ej: Miranda de Ebro" className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
         <button onClick={() => onGuardarConvenio(formConvenio)} className="mt-4 flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ background: '#1239AD' }}>
@@ -154,9 +195,14 @@ export default function VistaConfiguracion({
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-5 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-lg font-bold text-gray-900">Festivos {anioActual}</h2>
-          <button onClick={() => { setEditandoFestivo(null); setFormFestivo({ fecha: '', descripcion: '', ambito: 'MANUAL', medio_dia: false }); setModalFestivo(true); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-gray-200 hover:bg-gray-50">
-            <Plus size={14} /> Añadir
-          </button>
+          <div className="flex gap-2">
+            <button onClick={cargarFestivosAutomaticamente} disabled={cargandoFestivos} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-blue-200 text-blue-700 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed">
+              <Download size={14} /> {cargandoFestivos ? 'Cargando...' : 'Cargar Auto'}
+            </button>
+            <button onClick={() => { setEditandoFestivo(null); setFormFestivo({ fecha: '', descripcion: '', ambito: 'MANUAL', medio_dia: false }); setModalFestivo(true); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-gray-200 hover:bg-gray-50">
+              <Plus size={14} /> Añadir
+            </button>
+          </div>
         </div>
         <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
           {festivos.sort((a, b) => a.fecha.localeCompare(b.fecha)).map(f => {

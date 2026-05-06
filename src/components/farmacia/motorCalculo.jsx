@@ -32,6 +32,21 @@ export const calcularHorasDia = (fecha, horario) => {
   return total;
 };
 
+const contarDiasEventoEnAnio = (fechaInicio, fechaFin, anio) => {
+  const inicio = new Date(fechaInicio + 'T12:00:00');
+  const fin = new Date(fechaFin + 'T12:00:00');
+  const inicioAnio = new Date(anio, 0, 1, 12, 0, 0);
+  const finAnio = new Date(anio, 11, 31, 12, 0, 0);
+  const desde = inicio < inicioAnio ? inicioAnio : inicio;
+  const hasta = fin > finAnio ? finAnio : fin;
+  if (hasta < desde) return 0;
+  return Math.round((hasta - desde) / (1000 * 60 * 60 * 24)) + 1;
+};
+
+const esAnioBisiesto = (anio) => {
+  return (anio % 4 === 0 && anio % 100 !== 0) || (anio % 400 === 0);
+};
+
 // MOTOR DE CÁLCULO
 export const MotorCalculo = {
   calcularHorasAnuales: (empleado, convenio, eventos, festivos, horarios, simular = false) => {
@@ -49,7 +64,7 @@ export const MotorCalculo = {
     const finAnio = new Date(anio, 11, 31);
     let horasTeoricas = horasConvenio;
     if (fechaAlta && fechaAlta.getFullYear() === anio) {
-      const diasAnio = 365;
+      const diasAnio = esAnioBisiesto(anio) ? 366 : 365;
       const diasDesdeAlta = Math.round((finAnio - fechaAlta) / (1000 * 60 * 60 * 24)) + 1;
       horasTeoricas = Math.round((horasConvenio * (diasDesdeAlta / diasAnio)) * 100) / 100;
     }
@@ -95,8 +110,11 @@ export const MotorCalculo = {
             case 'SABADO_LIBRE':
               horasVacaciones += horasDia;
               break;
+            case 'FESTIVO_TRABAJADO':
+              // Se considera como día trabajado normal; no hay ajuste extra.
+              break;
             case 'FALTA_HORAS':
-              horasFaltas += eventoDelDia.horas || 0;
+              horasFaltas += eventoDelDia.horas || horasDia;
               break;
             case 'HORAS_EXTRA':
               horasExtra += eventoDelDia.horas || 0;
@@ -132,17 +150,14 @@ export const MotorCalculo = {
       e.empleado_id === empleado.id && 
       e.tipo_evento === 'VACACIONES'
     ).reduce((total, e) => {
-      const inicio = new Date(e.fecha_inicio + 'T12:00:00');
-      const fin = new Date(e.fecha_fin + 'T12:00:00');
-      const dias = Math.round((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
-      return total + dias;
+      return total + contarDiasEventoEnAnio(e.fecha_inicio, e.fecha_fin, anio);
     }, 0);
 
     // Proporcional si el empleado se dio de alta dentro del año
     let totalVacaciones = convenio.dias_vacaciones;
     const fechaAlta = empleado.fecha_alta ? new Date(empleado.fecha_alta + 'T12:00:00') : null;
     if (fechaAlta && fechaAlta.getFullYear() === anio) {
-      const diasAnio = 365;
+      const diasAnio = esAnioBisiesto(anio) ? 366 : 365;
       const diasDesdeAlta = Math.round((new Date(anio, 11, 31) - fechaAlta) / (1000 * 60 * 60 * 24)) + 1;
       totalVacaciones = Math.round(convenio.dias_vacaciones * (diasDesdeAlta / diasAnio));
     }
@@ -160,17 +175,14 @@ export const MotorCalculo = {
       e.empleado_id === empleado.id && 
       e.tipo_evento === 'ASUNTOS_PROPIOS'
     ).reduce((total, e) => {
-      const inicio = new Date(e.fecha_inicio + 'T12:00:00');
-      const fin = new Date(e.fecha_fin + 'T12:00:00');
-      const dias = Math.round((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
-      return total + dias;
+      return total + contarDiasEventoEnAnio(e.fecha_inicio, e.fecha_fin, anio);
     }, 0);
 
     // Proporcional si el empleado se dio de alta dentro del año
     let totalAsuntos = convenio.dias_asuntos_propios;
     const fechaAlta = empleado.fecha_alta ? new Date(empleado.fecha_alta + 'T12:00:00') : null;
     if (fechaAlta && fechaAlta.getFullYear() === anio) {
-      const diasAnio = 365;
+      const diasAnio = esAnioBisiesto(anio) ? 366 : 365;
       const diasDesdeAlta = Math.round((new Date(anio, 11, 31) - fechaAlta) / (1000 * 60 * 60 * 24)) + 1;
       totalAsuntos = Math.round(convenio.dias_asuntos_propios * (diasDesdeAlta / diasAnio));
     }
@@ -242,8 +254,11 @@ export const MotorCalculo = {
               break;
             case 'SABADO_LIBRE':
               break;
+            case 'FESTIVO_TRABAJADO':
+              // Se considera como día trabajado normal; no hay ajuste extra.
+              break;
             case 'FALTA_HORAS':
-              horasFaltas += evento.horas || 0;
+              horasFaltas += evento.horas || horasDia;
               break;
             case 'HORAS_EXTRA':
               horasExtra += evento.horas || 0;
@@ -264,7 +279,7 @@ export const MotorCalculo = {
     const horasConvenioBase = empleado.horas_anuales || convenio.horas_anuales;
     let horasAnualesEmpleado = horasConvenioBase;
     if (fechaAltaSab && fechaAltaSab.getFullYear() === anioSab) {
-      const diasAnio = 365;
+      const diasAnio = esAnioBisiesto(anioSab) ? 366 : 365;
       const diasDesdeAlta = Math.round((new Date(anioSab, 11, 31) - fechaAltaSab) / (1000 * 60 * 60 * 24)) + 1;
       horasAnualesEmpleado = Math.round((horasConvenioBase * (diasDesdeAlta / diasAnio)) * 100) / 100;
     }

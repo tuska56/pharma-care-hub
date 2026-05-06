@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Loader2, Smartphone } from 'lucide-react';
 import useAppData from '../components/farmacia/useAppData';
 import useCurrentUser from '../components/farmacia/useCurrentUser';
@@ -25,12 +25,14 @@ export default function FarmaciaControl() {
     crearGuardia, actualizarGuardia, eliminarGuardia,
     crearFestivo, actualizarFestivo, eliminarFestivo,
     guardarConvenio,
+    restaurarBackup,
   } = useAppData();
 
   const { user, loading: loadingUser, isAdmin, isEmpleado } = useCurrentUser();
   const [vista, setVista] = useState('dashboard');
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(null);
   const [modalInstall, setModalInstall] = useState(false);
+  const fileInputRef = useRef(null);
   const { logoUrl, subirLogo, quitarLogo, uploading } = useLogoStore();
 
   const handleSelectEmpleado = (emp) => {
@@ -44,6 +46,28 @@ export default function FarmaciaControl() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `farmacia_backup_${anioActual}.json`; a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleImportBackup = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const datos = JSON.parse(reader.result);
+        restaurarBackup.mutate(datos);
+        window.alert('Backup importado correctamente.');
+      } catch (error) {
+        window.alert('No se pudo importar el backup. El archivo JSON no es válido.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const importarDB = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = null;
+      fileInputRef.current.click();
+    }
   };
 
   const exportarCSV = () => {
@@ -190,6 +214,17 @@ export default function FarmaciaControl() {
         </div>
       </header>
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleImportBackup(file);
+        }}
+      />
+
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {vista === 'dashboard' && (
@@ -202,6 +237,7 @@ export default function FarmaciaControl() {
             estadisticas={estadisticas}
             onSelectEmpleado={handleSelectEmpleado}
             onExportDB={exportarDB}
+            onImportDB={importarDB}
           />
         )}
 

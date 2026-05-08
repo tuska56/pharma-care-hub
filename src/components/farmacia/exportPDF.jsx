@@ -18,8 +18,9 @@ async function urlToBase64(url) {
 
 const LOGO_URL = logoSvg;
 
-export async function exportarPDFEmpleado({ empleado, estadistica, anioActual, eventos, festivos, guardias }) {
+export async function exportarPDFEmpleado({ empleado, estadistica, anioActual, eventos, festivos, guardias, logoUrl }) {
   const stat = estadistica;
+  const logoSource = logoUrl || LOGO_URL;
   const empEventos = eventos.filter(e => e.empleado_id === empleado.id);
 
   // Generar HTML del calendario anual (12 meses)
@@ -39,10 +40,10 @@ export async function exportarPDFEmpleado({ empleado, estadistica, anioActual, e
         </tr>`).join('')
     : '<tr><td colspan="5" style="padding:8px;color:#999;text-align:center">Sin eventos registrados</td></tr>';
 
-  const logoBase64 = await urlToBase64(LOGO_URL);
+  const logoBase64 = await urlToBase64(logoSource);
   const logoHTML = logoBase64
     ? `<img src="${logoBase64}" alt="Logo" style="height:56px;object-fit:contain;" />`
-    : `<img src="${LOGO_URL}" alt="Logo" style="height:56px;object-fit:contain;" />`;
+    : `<img src="${logoSource}" alt="Logo" style="height:56px;object-fit:contain;" />`;
 
   const html = `<!DOCTYPE html>
 <html lang="es">

@@ -12,13 +12,15 @@ const defaultState = {
       nombre: 'Admin Local',
       fecha_alta: new Date().toISOString().split('T')[0],
       activo: true,
-      horas_arrastre: 0
+      horas_arrastre: 0,
+      merito: 50
     }
   ],
   eventos: [],
   horarios: [],
   guardias: [],
   festivos: [],
+  traspasos_historial: [],
   convenio: {
     anio: new Date().getFullYear(),
     nombre: 'Farmacia Local',
@@ -29,6 +31,12 @@ const defaultState = {
     provincia: 'Burgos',
     localidad: 'Miranda de Ebro'
   },
+  planificacion: {
+    anio: null,
+    ultimaEjecucion: null,
+    asignaciones: [],
+    pesos_empleados: {}
+  },
   isLoading: false
 };
 
@@ -37,7 +45,19 @@ const readStorage = () => {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaultState;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return {
+      ...defaultState,
+      ...parsed,
+      convenio: {
+        ...defaultState.convenio,
+        ...(parsed.convenio || {})
+      },
+      planificacion: {
+        ...defaultState.planificacion,
+        ...(parsed.planificacion || {})
+      }
+    };
   } catch {
     return defaultState;
   }
@@ -96,7 +116,7 @@ export default function useAppData() {
     mutate: (data) => {
       setState(prev => ({
         ...prev,
-        empleados: [...prev.empleados, { id: getId(), activo: true, horas_arrastre: 0, ...data }]
+        empleados: [...prev.empleados, { id: getId(), activo: true, horas_arrastre: 0, merito: 50, ...data }]
       }));
     }
   }), []);
@@ -186,7 +206,8 @@ export default function useAppData() {
 
   const crearFestivo = useMemo(() => ({
     mutate: (data) => {
-      setState(prev => ({ ...prev, festivos: [...prev.festivos, { id: getId(), ...data }] }));
+      const festivo = { id: data.id || getId(), ...data };
+      setState(prev => ({ ...prev, festivos: [...prev.festivos, festivo] }));
     }
   }), []);
 
@@ -194,14 +215,55 @@ export default function useAppData() {
     mutate: ({ id, data }) => {
       setState(prev => ({
         ...prev,
-        festivos: prev.festivos.map(f => f.id === id ? { ...f, ...data } : f)
+        festivos: prev.festivos.map(f => {
+          if (id && f.id === id) return { ...f, ...data };
+          if (!id && f.fecha === data.fecha) return { ...f, ...data };
+          return f;
+        })
       }));
     }
   }), []);
 
   const eliminarFestivo = useMemo(() => ({
-    mutate: (id) => {
-      setState(prev => ({ ...prev, festivos: prev.festivos.filter(f => f.id !== id) }));
+    mutate: (identifier) => {
+      setState(prev => ({
+        ...prev,
+        festivos: prev.festivos.filter(f => {
+          if (!identifier) return false;
+          if (typeof identifier === 'string') {
+            return f.id !== identifier && f.fecha !== identifier;
+          }
+          return f.id !== identifier.id && f.fecha !== identifier.fecha;
+        })
+      }));
+    }
+  }), []);
+
+  const guardarPlanificacion = useMemo(() => ({
+    mutate: ({ anio, assignments, eventosPlanificados, contadoresPorEmpleado }) => {
+      setState(prev => ({
+        ...prev,
+        eventos: [
+          ...prev.eventos.filter(ev => !(ev.tipo_evento === 'SABADO_LIBRE' && ev.origen === 'planificacion')),
+          ...eventosPlanificados.map(evento => ({ id: getId(), ...evento }))
+        ],
+        empleados: prev.empleados.map(emp => {
+          const contador = contadoresPorEmpleado?.[emp.id];
+          if (!contador) return emp;
+          return {
+            ...emp,
+            beneficios: {
+              ...(emp.beneficios || {}),
+              ...contador
+            }
+          };
+        }),
+        planificacion: {
+          anio,
+          ultimaEjecucion: new Date().toISOString(),
+          asignaciones: assignments
+        }
+      }));
     }
   }), []);
 
@@ -225,7 +287,41 @@ export default function useAppData() {
           ...backup.convenio,
           anio: backup.convenio?.anio ?? prev.convenio.anio
         },
+        planificacion: {
+          ...prev.planificacion,
+          ...backup.planificacion
+        },
         anioActual: backup.anio ?? prev.anioActual
+      }));
+    }
+  }), []);
+
+  const registrarTraspaso = useMemo(() => ({
+    mutate: ({ empleado_id, horas, comentario }) => {
+      setState(prev => ({
+        ...prev,
+        traspasos_historial: [
+          ...prev.traspasos_historial,
+          {
+            id: getId(),
+            empleado_id,
+            horas,
+            comentario,
+            fecha: new Date().toISOString()
+          }
+        ]
+      }));
+    }
+  }), []);
+
+  const actualizarPesosSimulacion = useMemo(() => ({
+    mutate: (pesos_empleados) => {
+      setState(prev => ({
+        ...prev,
+        planificacion: {
+          ...prev.planificacion,
+          pesos_empleados
+        }
       }));
     }
   }), []);
@@ -245,6 +341,7 @@ export default function useAppData() {
     convenio: state.convenio,
     estadisticas,
     isLoading: state.isLoading,
+    traspasos_historial: state.traspasos_historial,
     crearEmpleado,
     actualizarEmpleado,
     eliminarEmpleado,
@@ -261,6 +358,10 @@ export default function useAppData() {
     actualizarFestivo,
     eliminarFestivo,
     guardarConvenio,
-    restaurarBackup
+    guardarPlanificacion,
+    restaurarBackup,
+    registrarTraspaso,
+    actualizarPesosSimulacion,
+    planificacion: state.planificacion
   };
 }

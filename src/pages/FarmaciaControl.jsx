@@ -8,6 +8,7 @@ import VistaEmpleado from '../components/farmacia/VistaEmpleado';
 import VistaEmpleadoRO from '../components/farmacia/VistaEmpleadoRO';
 import VistaConfiguracion from '../components/farmacia/VistaConfiguracion';
 import VistaUsuarios from '../components/farmacia/VistaUsuarios';
+import PlanificacionView from '../components/farmacia/PlanificacionView';
 import ModalInstall from '../components/farmacia/ModalInstall';
 import useLogoStore from '../components/farmacia/useLogoStore';
 import { appClient } from '../api/appClient';
@@ -24,8 +25,8 @@ export default function FarmaciaControl() {
     crearHorario, actualizarHorario, eliminarHorario,
     crearGuardia, actualizarGuardia, eliminarGuardia,
     crearFestivo, actualizarFestivo, eliminarFestivo,
-    guardarConvenio,
-    restaurarBackup,
+    guardarConvenio, guardarPlanificacion, planificacion,
+    restaurarBackup, registrarTraspaso, actualizarPesosSimulacion
   } = useAppData();
 
   const { user, loading: loadingUser, isAdmin, isEmpleado } = useCurrentUser();
@@ -41,7 +42,7 @@ export default function FarmaciaControl() {
   };
 
   const exportarDB = () => {
-    const datos = { empleados, eventos, horarios, guardias, festivos, convenio, anio: anioActual };
+    const datos = { empleados, eventos, horarios, guardias, festivos, convenio, anio: anioActual, planificacion };
     const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `farmacia_backup_${anioActual}.json`; a.click();
@@ -137,7 +138,7 @@ export default function FarmaciaControl() {
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-14">
               <div className="flex items-center gap-2.5">
-                <img src={logoSvg} alt="Logo" className="h-8 w-auto object-contain rounded" />
+                <img src={logoUrl || logoSvg} alt="Logo" className="h-8 w-auto object-contain rounded" />
                 <span className="text-lg font-bold tracking-tight hidden sm:inline" style={{ color: '#1239AD' }}>Calendario Farmacia</span>
               </div>
               <div className="flex items-center gap-2">
@@ -173,6 +174,7 @@ export default function FarmaciaControl() {
 
   const navItems = [
     { key: 'dashboard', label: 'Dashboard' },
+    { key: 'planificacion', label: 'Planificación' },
     { key: 'empleados', label: 'Empleados' },
     { key: 'usuarios', label: 'Usuarios' },
     { key: 'configuracion', label: 'Config' },
@@ -185,7 +187,7 @@ export default function FarmaciaControl() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-2.5">
-              <img src={logoSvg} alt="Logo" className="h-8 w-auto object-contain rounded" />
+              <img src={logoUrl || logoSvg} alt="Logo" className="h-8 w-auto object-contain rounded" />
               <span className="text-lg font-bold tracking-tight hidden sm:inline" style={{ color: '#1239AD' }}>Calendario Farmacia</span>
             </div>
             <nav className="flex gap-1 items-center">
@@ -273,6 +275,19 @@ export default function FarmaciaControl() {
           />
         )}
 
+        {vista === 'planificacion' && (
+          <PlanificacionView
+            anioActual={anioActual}
+            empleados={empleados}
+            eventos={eventos}
+            festivos={festivos}
+            horarios={horarios}
+            convenio={convenio}
+            planificacion={planificacion}
+            onConfirmPlanificacion={(plan) => guardarPlanificacion.mutate(plan)}
+          />
+        )}
+
         {vista === 'usuarios' && (
           <VistaUsuarios empleados={empleados} />
         )}
@@ -297,6 +312,7 @@ export default function FarmaciaControl() {
             onActualizarFestivo={({ id, data }) => actualizarFestivo.mutate({ id, data })}
             onEliminarFestivo={(id) => eliminarFestivo.mutate(id)}
             onActualizarEmpleado={({ id, data }) => actualizarEmpleado.mutate({ id, data })}
+            onRegistrarTraspaso={registrarTraspaso}
           />
         )}
       </main>

@@ -98,7 +98,8 @@ export const MotorCalculo = {
         const eventoDelDia = eventos.find(e => 
           e.empleado_id === empleado.id && 
           fecha >= e.fecha_inicio && 
-          fecha <= e.fecha_fin
+          fecha <= e.fecha_fin &&
+          (e.estado === undefined || e.estado === 'APROBADO')
         );
         
         const festivoDelDia = festivos.find(f => f.fecha === fecha);
@@ -148,7 +149,8 @@ export const MotorCalculo = {
     const anio = convenio.anio;
     const vacacionesUsadas = eventos.filter(e => 
       e.empleado_id === empleado.id && 
-      e.tipo_evento === 'VACACIONES'
+      e.tipo_evento === 'VACACIONES' &&
+      (e.estado === undefined || e.estado === 'APROBADO')
     ).reduce((total, e) => {
       return total + contarDiasEventoEnAnio(e.fecha_inicio, e.fecha_fin, anio);
     }, 0);
@@ -173,7 +175,8 @@ export const MotorCalculo = {
     const anio = convenio.anio;
     const asuntosUsados = eventos.filter(e => 
       e.empleado_id === empleado.id && 
-      e.tipo_evento === 'ASUNTOS_PROPIOS'
+      e.tipo_evento === 'ASUNTOS_PROPIOS' &&
+      (e.estado === undefined || e.estado === 'APROBADO')
     ).reduce((total, e) => {
       return total + contarDiasEventoEnAnio(e.fecha_inicio, e.fecha_fin, anio);
     }, 0);
@@ -241,7 +244,8 @@ export const MotorCalculo = {
         const evento = eventos.find(e => 
           e.empleado_id === empleado.id && 
           fecha >= e.fecha_inicio && 
-          fecha <= e.fecha_fin
+          fecha <= e.fecha_fin &&
+          (e.estado === undefined || e.estado === 'APROBADO')
         );
         
         const festivo = festivos.find(f => f.fecha === fecha);

@@ -7,6 +7,7 @@ export default function VistaDashboard({
   onSelectEmpleado, onExportDB, onImportDB
 }) {
   const currentYear = new Date().getFullYear();
+  const festivosDelAnio = festivos.filter(f => f.fecha?.startsWith(`${anioActual}-`));
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -79,7 +80,7 @@ export default function VistaDashboard({
 
       {/* Calendario global */}
       <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-        <CalendarioGlobal anio={anioActual} empleados={empleados} eventos={eventos} festivos={festivos} />
+        <CalendarioGlobal anio={anioActual} empleados={empleados} eventos={eventos} festivos={festivosDelAnio} />
       </div>
 
       {/* Resumen empleados */}

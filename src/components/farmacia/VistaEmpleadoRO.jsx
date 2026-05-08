@@ -112,7 +112,7 @@ export default function VistaEmpleadoRO({
           <Plus size={16} /> Solicitar Ausencia
         </button>
         <button
-          onClick={() => exportarPDFEmpleado({ empleado, estadistica, anioActual, eventos, festivos, guardias })}
+          onClick={() => exportarPDFEmpleado({ empleado, estadistica, anioActual, eventos, festivos, guardias, logoUrl })}
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50"
         >
           <FileText size={16} /> Ver mi PDF

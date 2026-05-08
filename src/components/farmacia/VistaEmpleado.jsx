@@ -88,6 +88,7 @@ export default function VistaEmpleado({
     }
     setModalHorario(false);
     setEditandoHorario(null);
+    setFormHorario(defaultHorario());
   };
 
   const stat = estadistica;
@@ -161,7 +162,7 @@ export default function VistaEmpleado({
           <Plus size={16} /> Horario
         </button>
         <button
-          onClick={() => exportarPDFEmpleado({ empleado, estadistica: estadistica, anioActual, eventos, festivos, guardias })}
+          onClick={() => exportarPDFEmpleado({ empleado, estadistica: estadistica, anioActual, eventos, festivos, guardias, logoUrl })}
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50"
         >
           <FileText size={16} /> PDF
@@ -400,7 +401,7 @@ export default function VistaEmpleado({
             <button onClick={guardarHorario} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: '#1239AD' }}>
               <Save size={16} /> Guardar
             </button>
-            <button onClick={() => { setModalHorario(false); setEditandoHorario(null); }} className="px-4 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">Cancelar</button>
+            <button onClick={() => { setModalHorario(false); setEditandoHorario(null); setFormHorario(defaultHorario()); }} className="px-4 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">Cancelar</button>
           </div>
         </div>
       </ModalGenerico>

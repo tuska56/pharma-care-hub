@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { Plus, Pencil, Trash2, Save, Download } from 'lucide-react';
 import ModalGenerico from './ModalGenerico';
-import { obtenerFestivosEspana, fusionarFestivos, PROVINCIAS_ESPAÑA } from './obtenerFestivos';
+import { obtenerFestivosEspana, compararFestivos, detectarConflictosFestivos, PROVINCIAS_ESPAÑA } from './obtenerFestivos';
 import logoSvg from '@/assets/logo.svg';
 
 export default function VistaConfiguracion({
@@ -10,44 +10,84 @@ export default function VistaConfiguracion({
   onGuardarConvenio,
   onCrearGuardia, onActualizarGuardia, onEliminarGuardia,
   onCrearFestivo, onActualizarFestivo, onEliminarFestivo,
-  onActualizarEmpleado
+  onActualizarEmpleado, onRegistrarTraspaso
 }) {
   const [modalGuardia, setModalGuardia] = useState(false);
   const [modalFestivo, setModalFestivo] = useState(false);
   const [modalTraspaso, setModalTraspaso] = useState(false);
+  const [modalConflictos, setModalConflictos] = useState(false);
   const [editandoGuardia, setEditandoGuardia] = useState(null);
   const [editandoFestivo, setEditandoFestivo] = useState(null);
   const [cargandoFestivos, setCargandoFestivos] = useState(false);
-  
+  const [conflictos, setConflictos] = useState([]);
+  const [festivosParaAgregar, setFestivosParaAgregar] = useState([]);
+  const fileInputRef = useRef(null);
+
   const [formConvenio, setFormConvenio] = useState({ horas_anuales: convenio.horas_anuales, dias_vacaciones: convenio.dias_vacaciones, dias_asuntos_propios: convenio.dias_asuntos_propios, provincia: convenio.provincia || 'Burgos', localidad: convenio.localidad || 'Miranda de Ebro' });
   const [formGuardia, setFormGuardia] = useState({ empleado_id: '', fecha: '', tipo: '', observaciones: '' });
   const [formFestivo, setFormFestivo] = useState({ fecha: '', descripcion: '', ambito: 'MANUAL', medio_dia: false });
-  const [formTraspaso, setFormTraspaso] = useState({ empleado_id: '', horas: 0 });
+  const [formTraspaso, setFormTraspaso] = useState({ empleado_id: '', horas: 0, comentario: '' });
 
   React.useEffect(() => {
     setFormConvenio({ horas_anuales: convenio.horas_anuales, dias_vacaciones: convenio.dias_vacaciones, dias_asuntos_propios: convenio.dias_asuntos_propios, provincia: convenio.provincia || 'Burgos', localidad: convenio.localidad || 'Miranda de Ebro' });
   }, [convenio]);
 
-  useEffect(() => {
-    cargarFestivosAutomaticamente();
-  }, [anioActual, formConvenio.provincia, formConvenio.localidad]);
-
-  const cargarFestivosAutomaticamente = async () => {
+  const buscarFestivos = async () => {
     setCargandoFestivos(true);
     try {
       const nuevos = await obtenerFestivosEspana(anioActual, formConvenio.provincia, formConvenio.localidad);
-      const fusionados = fusionarFestivos(festivos, nuevos);
-      const existentesIds = new Set(festivos.map(f => f.id));
-      fusionados.forEach(f => {
-        if (!existentesIds.has(f.id)) {
-          onCrearFestivo(f);
-        }
-      });
+      const nuevosSinDuplicados = nuevos.filter(nuevo => !festivos.some(existente => compararFestivos(existente, nuevo)));
+      const conflictosDetectados = detectarConflictosFestivos(festivos, nuevos);
+      const soloNuevos = nuevosSinDuplicados.filter(nuevo => !conflictosDetectados.some(conf => conf.fecha === nuevo.fecha));
+
+      if (conflictosDetectados.length > 0) {
+        setConflictos(conflictosDetectados);
+        setFestivosParaAgregar(soloNuevos);
+        setModalConflictos(true);
+        return;
+      }
+      if (soloNuevos.length === 0) {
+        window.alert('No hay festivos nuevos para este año y esta provincia/localidad.');
+        return;
+      }
+
+      soloNuevos.forEach(f => onCrearFestivo(f));
+      window.alert(`Se han añadido ${soloNuevos.length} festivos nuevos.`);
     } catch (error) {
       console.error('Error cargando festivos:', error);
+      window.alert('No se pudieron cargar los festivos. Comprueba tu conexión e inténtalo de nuevo.');
     } finally {
       setCargandoFestivos(false);
     }
+  };
+
+  const aceptarConflictos = () => {
+    conflictos.forEach(nuevo => {
+      const existente = festivos.find(f => f.fecha === nuevo.fecha);
+      if (existente) {
+        onActualizarFestivo({ id: existente.id, data: { fecha: nuevo.fecha, descripcion: nuevo.descripcion, ambito: nuevo.ambito, medio_dia: nuevo.medio_dia } });
+      } else {
+        onCrearFestivo(nuevo);
+      }
+    });
+    festivosParaAgregar.forEach(f => onCrearFestivo(f));
+    setModalConflictos(false);
+    setConflictos([]);
+    setFestivosParaAgregar([]);
+    window.alert('Festivos actualizados.');
+  };
+
+  const cancelarConflictos = () => {
+    setModalConflictos(false);
+    setConflictos([]);
+    setFestivosParaAgregar([]);
+  };
+
+  const handleLogoFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await subirLogo(file);
+    event.target.value = null;
   };
 
   const guardarGuardia = () => {
@@ -66,12 +106,9 @@ export default function VistaConfiguracion({
   const guardarFestivo = () => {
     if (!formFestivo.fecha || !formFestivo.descripcion) return;
     const data = { fecha: formFestivo.fecha, descripcion: formFestivo.descripcion, ambito: formFestivo.ambito, medio_dia: formFestivo.medio_dia };
-    const esPredefinido = editandoFestivo && typeof editandoFestivo.id === 'string' && editandoFestivo.id.startsWith('pre_');
-    if (editandoFestivo && !esPredefinido) {
-      // Festivo real en BD: actualizar
+    if (editandoFestivo) {
       onActualizarFestivo({ id: editandoFestivo.id, data });
     } else {
-      // Festivo nuevo o predefinido que se edita: crear en BD
       onCrearFestivo(data);
     }
     setModalFestivo(false);
@@ -82,8 +119,13 @@ export default function VistaConfiguracion({
   const traspasarHoras = () => {
     if (!formTraspaso.empleado_id || !formTraspaso.horas) return;
     onActualizarEmpleado({ id: formTraspaso.empleado_id, data: { horas_arrastre: parseFloat(formTraspaso.horas) } });
+    onRegistrarTraspaso?.mutate?.({ 
+      empleado_id: formTraspaso.empleado_id, 
+      horas: parseFloat(formTraspaso.horas),
+      comentario: formTraspaso.comentario || 'Sin comentario'
+    });
     setModalTraspaso(false);
-    setFormTraspaso({ empleado_id: '', horas: 0 });
+    setFormTraspaso({ empleado_id: '', horas: 0, comentario: '' });
   };
 
   const festivosManuales = festivos.filter(f => typeof f.id === 'string' ? !f.id.startsWith('pre_') : true);
@@ -108,9 +150,22 @@ export default function VistaConfiguracion({
       {/* Logo fijo */}
       <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
         <h2 className="text-lg font-bold text-gray-900 mb-3">Logo de la Farmacia</h2>
-        <div className="flex items-center gap-4">
-          <img src={logoSvg} alt="Logo Farmacia" className="h-16 object-contain" />
-          <p className="text-sm text-gray-500">María García Puelles · Farmacia</p>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <img src={logoUrl || logoSvg} alt="Logo Farmacia" className="h-16 object-contain rounded-xl border border-gray-200" />
+          <div className="space-y-2">
+            <p className="text-sm text-gray-500">Sube el logotipo de la farmacia y se mostrará en la esquina superior izquierda.</p>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => fileInputRef.current?.click()} className="px-3 py-2 rounded-xl text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                {uploading ? 'Subiendo...' : 'Subir logo'}
+              </button>
+              {logoUrl && (
+                <button onClick={quitarLogo} className="px-3 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50">
+                  Quitar logo
+                </button>
+              )}
+            </div>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoFile} />
+          </div>
         </div>
       </div>
 
@@ -196,8 +251,8 @@ export default function VistaConfiguracion({
         <div className="p-5 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-lg font-bold text-gray-900">Festivos {anioActual}</h2>
           <div className="flex gap-2">
-            <button onClick={cargarFestivosAutomaticamente} disabled={cargandoFestivos} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-blue-200 text-blue-700 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed">
-              <Download size={14} /> {cargandoFestivos ? 'Cargando...' : 'Cargar Auto'}
+            <button onClick={buscarFestivos} disabled={cargandoFestivos} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-blue-200 text-blue-700 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed">
+              <Download size={14} /> {cargandoFestivos ? 'Buscando...' : 'Buscar festivos'}
             </button>
             <button onClick={() => { setEditandoFestivo(null); setFormFestivo({ fecha: '', descripcion: '', ambito: 'MANUAL', medio_dia: false }); setModalFestivo(true); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border border-gray-200 hover:bg-gray-50">
               <Plus size={14} /> Añadir
@@ -205,10 +260,11 @@ export default function VistaConfiguracion({
           </div>
         </div>
         <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
-          {festivos.sort((a, b) => a.fecha.localeCompare(b.fecha)).map(f => {
-            const esPredefinido = typeof f.id === 'string' && f.id.startsWith('pre_');
+          {(Array.isArray(festivos) ? [...festivos].sort((a, b) => (a?.fecha || '').localeCompare(b?.fecha || '')) : []).map((f, index) => {
+            const key = f.id || `${f.fecha || 'festivo'}-${index}`;
+            const esPredefinido = f.id && typeof f.id === 'string' && f.id.startsWith('pre_');
             return (
-              <div key={f.id} className="p-3 flex items-center justify-between">
+              <div key={key} className="p-3 flex items-center justify-between">
                 <div>
                   <span className="font-medium text-sm">{f.descripcion}</span>
                   <span className="text-xs text-gray-500 ml-2">{f.fecha}</span>
@@ -222,13 +278,7 @@ export default function VistaConfiguracion({
                     setFormFestivo({ fecha: f.fecha, descripcion: f.descripcion, ambito: f.ambito, medio_dia: f.medio_dia || false });
                     setModalFestivo(true);
                   }}><Pencil size={12} className="text-gray-400" /></button>
-                  {/* Borrar solo disponible para festivos guardados en BD (id no empieza por pre_) */}
-                  {!esPredefinido && (
-                    <button className="p-1.5 hover:bg-red-50 rounded-lg" title="Eliminar festivo" onClick={() => onEliminarFestivo(f.id)}><Trash2 size={12} className="text-red-400" /></button>
-                  )}
-                  {esPredefinido && (
-                    <span className="w-7 inline-block" title="Festivo predefinido (edítalo para guardarlo en BD y poder borrarlo)" />
-                  )}
+                  <button className="p-1.5 hover:bg-red-50 rounded-lg" title="Eliminar festivo" onClick={() => onEliminarFestivo(f.id || f.fecha)}><Trash2 size={12} className="text-red-400" /></button>
                 </div>
               </div>
             );
@@ -309,12 +359,46 @@ export default function VistaConfiguracion({
             <label className="text-sm font-medium text-gray-700">Horas</label>
             <input type="number" step="0.5" value={formTraspaso.horas} onChange={e => setFormTraspaso({ ...formTraspaso, horas: e.target.value })} className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
           </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700">Comentarios</label>
+            <textarea value={formTraspaso.comentario} onChange={e => setFormTraspaso({ ...formTraspaso, comentario: e.target.value })} placeholder="Ej: Traspaso por horas extra trabajadas..." className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" rows="3" />
+          </div>
           <div className="p-3 bg-blue-50 rounded-xl text-sm text-blue-800">
-            Las horas se asignarán como arrastre del empleado.
+            Las horas se asignarán como arrastre del empleado. Los comentarios se guardarán en el historial.
           </div>
           <div className="flex gap-2 pt-2">
             <button onClick={traspasarHoras} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: '#1239AD' }}><Save size={16} /> Traspasar</button>
             <button onClick={() => setModalTraspaso(false)} className="px-4 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">Cancelar</button>
+          </div>
+        </div>
+      </ModalGenerico>
+
+      <ModalGenerico isOpen={modalConflictos} onClose={cancelarConflictos} title="Conflictos de festivos">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">Se han encontrado festivos con la misma fecha pero diferente descripción. Elige si quieres reemplazarlos o cancelar la importación.</p>
+          <div className="space-y-3 max-h-72 overflow-y-auto border border-gray-100 rounded-xl p-3 bg-gray-50">
+            {conflictos.map(f => {
+              const existente = festivos.find(ex => ex.fecha === f.fecha);
+              return (
+                <div key={f.fecha} className="p-3 rounded-xl bg-white border border-gray-100">
+                  <p className="text-sm font-medium text-gray-900">{f.fecha}</p>
+                  <p className="text-xs text-gray-500">Antiguo: {existente?.descripcion || 'No existe'}</p>
+                  <p className="text-xs text-gray-700">Nuevo: {f.descripcion} <span className="uppercase text-[10px] text-blue-600">{f.ambito}</span></p>
+                </div>
+              );
+            })}
+          </div>
+          {festivosParaAgregar.length > 0 && (
+            <div className="p-3 rounded-xl bg-white border border-gray-100">
+              <p className="text-sm font-medium text-gray-900">Festivos nuevos listos para añadir:</p>
+              <ul className="mt-2 text-sm text-gray-600 space-y-1">
+                {festivosParaAgregar.map(f => (<li key={f.fecha}>{f.fecha} · {f.descripcion}</li>))}
+              </ul>
+            </div>
+          )}
+          <div className="flex gap-2 pt-2">
+            <button onClick={aceptarConflictos} className="flex-1 px-4 py-2 rounded-xl text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Reemplazar y añadir</button>
+            <button onClick={cancelarConflictos} className="flex-1 px-4 py-2 rounded-xl text-sm font-medium bg-gray-100 text-gray-700">Cancelar</button>
           </div>
         </div>
       </ModalGenerico>

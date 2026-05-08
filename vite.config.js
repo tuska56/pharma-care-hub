@@ -3,8 +3,8 @@ import { defineConfig } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
 
 // https://vite.dev/config/
-export default defineConfig({
-  base: '/pharma-care-hub/',
+export default defineConfig(({ command }) => ({
+  base: command === 'serve' ? '/' : '/pharma-care-hub/',
   logLevel: 'error', // Suppress warnings, only show errors
   resolve: {
     alias: {
@@ -14,4 +14,4 @@ export default defineConfig({
   plugins: [
     react(),
   ]
-});
+}));

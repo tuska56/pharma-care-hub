@@ -125,22 +125,24 @@ export const obtenerFestivosEspana = async (anio, provincia = 'Burgos', localida
 
 // Función para comparar festivos y evitar duplicados
 export const compararFestivos = (f1, f2) => {
+  if (!f1 || !f2) return false;
   return f1.fecha === f2.fecha && f1.descripcion.toLowerCase() === f2.descripcion.toLowerCase();
+};
+
+// Detectar conflictos cuando un festivo nuevo coincide en fecha pero no en descripción
+export const detectarConflictosFestivos = (festivosExistentes, festivosNuevos) => {
+  return festivosNuevos.filter(nuevo => {
+    const existente = festivosExistentes.find(f => f.fecha === nuevo.fecha);
+    return existente && !compararFestivos(existente, nuevo);
+  });
 };
 
 // Fusionar festivos descargados con los existentes, evitando duplicados
 export const fusionarFestivos = (festivosExistentes, festivosNuevos) => {
-  const existentes = festivosExistentes.filter(f => {
-    // Mantener solo los que fueron agregados manualmente (no predefinidos)
-    return typeof f.id === 'string' && !f.id.startsWith('pre_');
-  });
-  
   const nuevosFiltrados = festivosNuevos.filter(nuevo => {
-    // Filtrar duplicados con existentes
-    return !existentes.some(ex => compararFestivos(ex, nuevo));
+    return !festivosExistentes.some(ex => compararFestivos(ex, nuevo));
   });
-  
-  return [...existentes, ...nuevosFiltrados].sort((a, b) => a.fecha.localeCompare(b.fecha));
+  return [...festivosExistentes, ...nuevosFiltrados].sort((a, b) => a.fecha.localeCompare(b.fecha));
 };
 
 export { PROVINCIAS_ESPAÑA };
